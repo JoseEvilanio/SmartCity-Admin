@@ -1,14 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
 // ── Credenciais Supabase – Projeto SmartCity ─────────────────
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+// Usa variáveis de ambiente se disponíveis, senão usa os valores do projeto
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) ||
+  'https://rqjwxoevziywtprkddst.supabase.co';
+
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxand4b2V2eml5d3RwcmtkZHN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NTU2NTUsImV4cCI6MjA5NjAzMTY1NX0.72x3GhR3CMGJvXopwZb6LQPpQ3o5peVZhx9AdekovN8';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   throw new Error(
     '[Supabase] VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY devem estar definidas no ficheiro .env'
   );
 }
+
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
