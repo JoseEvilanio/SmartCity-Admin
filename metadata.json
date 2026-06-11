@@ -1,0 +1,6 @@
+{
+  "name": "SmartCity Admin",
+  "description": "Painel de Super Administrador para a gestão global da infraestrutura SmartCity UrbanPulse.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
