@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { X, Check, Globe } from 'lucide-react';
+import { X, Check, Globe, Loader2 } from 'lucide-react';
 import type { Municipality } from '../types';
+import { ALAGOAS_MUNICIPALITIES } from '../lib/alagoasMunicipalities';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -17,17 +18,32 @@ export default function RegisterModal({ isOpen, onClose, onSave }: RegisterModal
   const [users, setUsers] = useState<number>(120);
   const [occurrencesMonth, setOccurrencesMonth] = useState<number>(14);
 
-  // Suggested coordinates in Portugal based on common search names
-  const portugalCitiesGPS: Record<string, { lat: number; lng: number }> = {
-    'aveiro': { lat: 40.6405, lng: -8.6538 },
-    'faro': { lat: 37.0179, lng: -7.9308 },
-    'guimaraes': { lat: 41.4425, lng: -8.2918 },
-    'evora': { lat: 38.5714, lng: -7.9135 },
-    'funchal': { lat: 32.6600, lng: -16.9200 },
-    'viana do castelo': { lat: 41.6918, lng: -8.8344 },
-    'leiria': { lat: 39.7438, lng: -8.8078 },
-    'setubal': { lat: 38.5244, lng: -8.8931 },
+  // Coordinates for major municipalities in Alagoas, Brazil
+  const alagoasCitiesGPS: Record<string, { lat: number; lng: number }> = {
+    'maceio': { lat: -9.6658, lng: -35.7350 },
+    'maceió': { lat: -9.6658, lng: -35.7350 },
+    'arapiraca': { lat: -9.7512, lng: -36.6604 },
+    'palmeira dos indios': { lat: -9.4072, lng: -36.6318 },
+    'palmeira dos índios': { lat: -9.4072, lng: -36.6318 },
+    'rio largo': { lat: -9.4805, lng: -35.8427 },
+    'penedo': { lat: -10.2900, lng: -36.5861 },
+    'uniao dos palmares': { lat: -9.1578, lng: -36.0311 },
+    'união dos palmares': { lat: -9.1578, lng: -36.0311 },
+    'delmiro gouveia': { lat: -9.3879, lng: -37.9008 },
+    'santana do ipanema': { lat: -9.3789, lng: -37.2439 },
+    'coruripe': { lat: -10.1256, lng: -36.1756 },
+    'marechal deodoro': { lat: -9.7102, lng: -35.8947 },
+    'maragogi': { lat: -9.0122, lng: -35.2222 },
+    'sao miguel dos campos': { lat: -9.7811, lng: -36.0911 },
+    'são miguel dos campos': { lat: -9.7811, lng: -36.0911 }
   };
+
+  const [latitude, setLatitude] = useState<string>('-9.5713');
+  const [longitude, setLongitude] = useState<string>('-36.7819');
+  const [isSearchingCoords, setIsSearchingCoords] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Auto generate ID and Code representation based on name input
   useEffect(() => {
@@ -51,22 +67,90 @@ export default function RegisterModal({ isOpen, onClose, onSave }: RegisterModal
     }
   }, [name]);
 
+  // Filter suggestions when typing name
+  useEffect(() => {
+    if (name.trim()) {
+      const filtered = ALAGOAS_MUNICIPALITIES.filter((m) =>
+        m.toLowerCase().includes(name.trim().toLowerCase())
+      ).slice(0, 5);
+      setSuggestions(filtered);
+    } else {
+      setSuggestions([]);
+    }
+  }, [name]);
+
+  const searchCoordinatesForCity = async (cityName: string) => {
+    if (!cityName.trim()) return;
+    setIsSearchingCoords(true);
+    setSearchError(null);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+        cityName.trim()
+      )},Alagoas,Brasil&format=json&limit=1`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'SmartCityAdmin/1.0'
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Erro na resposta do serviço de geocodificação.');
+      }
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const result = data[0];
+        setLatitude(parseFloat(result.lat).toFixed(4));
+        setLongitude(parseFloat(result.lon).toFixed(4));
+        setSearchError(null);
+      } else {
+        setSearchError('Coordenadas não encontradas automaticamente. Insira manualmente.');
+      }
+    } catch (err: any) {
+      console.error('[Nominatim API]', err);
+      setSearchError('Erro ao pesquisar coordenadas. Insira manualmente.');
+    } finally {
+      setIsSearchingCoords(false);
+    }
+  };
+
+  const handleSelectCity = (cityName: string) => {
+    setName(cityName);
+    setShowSuggestions(false);
+    
+    // Look up in local GPS
+    const lowerName = cityName.trim().toLowerCase();
+    let found = false;
+    Object.keys(alagoasCitiesGPS).forEach((key) => {
+      if (lowerName === key || lowerName.includes(key)) {
+        setLatitude(alagoasCitiesGPS[key].lat.toFixed(4));
+        setLongitude(alagoasCitiesGPS[key].lng.toFixed(4));
+        found = true;
+      }
+    });
+
+    if (!found) {
+      searchCoordinatesForCity(cityName);
+    } else {
+      setSearchError(null);
+    }
+  };
+
+  const handleManualSearch = (e: React.MouseEvent) => {
+    e.preventDefault();
+    searchCoordinatesForCity(name);
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    // Resolve or generate coordinates near central Portugal
-    const lowerName = name.trim().toLowerCase();
-    let lat = 39.5 + (Math.random() - 0.5) * 1.5;
-    let lng = -8 + (Math.random() - 0.5) * 1.0;
-
-    // Check pre-registered coordinates mapping
-    Object.keys(portugalCitiesGPS).forEach((key) => {
-      if (lowerName.includes(key)) {
-        lat = portugalCitiesGPS[key].lat;
-        lng = portugalCitiesGPS[key].lng;
-      }
-    });
+    let lat = parseFloat(latitude);
+    let lng = parseFloat(longitude);
+    if (isNaN(lat) || isNaN(lng)) {
+      lat = -9.5713 + (Math.random() - 0.5) * 0.1;
+      lng = -36.7819 + (Math.random() - 0.5) * 0.1;
+    }
 
     const newMunicipality: Municipality = {
       id: customId || `T-${Math.floor(1000 + Math.random() * 9000)}-NEW`,
@@ -87,6 +171,9 @@ export default function RegisterModal({ isOpen, onClose, onSave }: RegisterModal
     setStatus('Ativo');
     setUsers(120);
     setOccurrencesMonth(14);
+    setLatitude('-9.5713');
+    setLongitude('-36.7819');
+    setSearchError(null);
   };
 
   if (!isOpen) return null;
@@ -115,16 +202,53 @@ export default function RegisterModal({ isOpen, onClose, onSave }: RegisterModal
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
           {/* Nome */}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-semibold text-on-surface mb-1.5">Nome do Município</label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Aveiro, Faro, Setúbal, Guimarães..."
-              className="w-full px-4 py-2 bg-surface hover:bg-surface-container-low border border-outline-variant focus:outline-none focus:ring-2 focus:ring-primary text-on-surface rounded-lg text-sm transition-all placeholder-on-surface-variant/40"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => {
+                  setTimeout(() => setShowSuggestions(false), 200);
+                }}
+                placeholder="Ex: Maceió, Arapiraca, Palmeira dos Índios..."
+                className="flex-1 px-4 py-2 bg-surface hover:bg-surface-container-low border border-outline-variant focus:outline-none focus:ring-2 focus:ring-primary text-on-surface rounded-lg text-sm transition-all placeholder-on-surface-variant/40"
+              />
+              <button
+                type="button"
+                onClick={handleManualSearch}
+                disabled={isSearchingCoords || !name.trim()}
+                className="px-3 bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer border border-outline-variant disabled:opacity-40 disabled:cursor-not-allowed select-none"
+              >
+                {isSearchingCoords ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                ) : (
+                  <Globe className="h-3.5 w-3.5 text-primary" />
+                )}
+                <span>Buscar GPS</span>
+              </button>
+            </div>
+
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute left-0 right-0 z-50 mt-1 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg overflow-hidden divide-y divide-outline-variant max-h-40 overflow-y-auto">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onMouseDown={() => handleSelectCity(suggestion)}
+                    className="w-full text-left px-4 py-2 hover:bg-surface-container-high text-on-surface text-sm transition-colors cursor-pointer border-none bg-transparent block"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -152,6 +276,41 @@ export default function RegisterModal({ isOpen, onClose, onSave }: RegisterModal
               />
             </div>
           </div>
+
+          {/* Latitude & Longitude Fields */}
+          <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-300">
+            <div>
+              <label className="block text-xs font-semibold text-on-surface mb-1.5">Latitude (GPS)</label>
+              <input
+                type="number"
+                step="any"
+                required
+                value={latitude}
+                onChange={(e) => setLatitude(e.target.value)}
+                placeholder="-9.5713"
+                className="w-full px-4 py-2 bg-surface hover:bg-surface-container-low border border-outline-variant focus:outline-none focus:ring-2 focus:ring-primary text-on-surface text-center font-medium rounded-lg text-sm transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface mb-1.5">Longitude (GPS)</label>
+              <input
+                type="number"
+                step="any"
+                required
+                value={longitude}
+                onChange={(e) => setLongitude(e.target.value)}
+                placeholder="-36.7819"
+                className="w-full px-4 py-2 bg-surface hover:bg-surface-container-low border border-outline-variant focus:outline-none focus:ring-2 focus:ring-primary text-on-surface text-center font-medium rounded-lg text-sm transition-all"
+              />
+            </div>
+          </div>
+
+          {searchError && (
+            <div className="text-[10px] font-semibold text-error px-3 py-2 bg-error-container/20 border border-error/20 rounded-lg">
+              {searchError}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             {/* Subscription Plan */}
@@ -213,7 +372,7 @@ export default function RegisterModal({ isOpen, onClose, onSave }: RegisterModal
             <Globe className="h-5 w-5 text-primary mt-0.5 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-on-surface">Mapeamento Geográfico Inteligente</p>
-              <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">As coordenadas GPS correspondentes ao território central de Portugal serão atribuídas e plotadas dinamicamente no painel.</p>
+              <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">As coordenadas GPS correspondentes ao estado de Alagoas, Brasil serão atribuídas e plotadas dinamicamente no painel.</p>
             </div>
           </div>
 
