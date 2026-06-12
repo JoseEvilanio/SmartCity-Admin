@@ -237,7 +237,7 @@ export async function createTeamMemberAuth(
     const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     if (listError) throw new Error(`[createTeamMemberAuth] ${listError.message}`);
 
-    const existing = users?.users.find((u) => u.email === email);
+    const existing = (users?.users as any[] | undefined)?.find((u) => u.email === email);
     if (!existing) throw new Error(`[createTeamMemberAuth] Usuário com email ${email} não encontrado.`);
 
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(

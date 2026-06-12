@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, MutableRefObject } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Navigation, Info, Users, AlertTriangle, ShieldCheck, Zap, LocateFixed, Loader2, MapPin } from 'lucide-react';
+import { Navigation, Info, Users, AlertTriangle, ShieldCheck, Zap, LocateFixed, Loader2, MapPin, CheckCircle, FileText, Clock } from 'lucide-react';
 import type { Municipality, OccurrencesRecord } from '../types';
 import type { ServiceOrderWithOccurrence } from '../lib/dataService';
 
@@ -21,6 +21,7 @@ interface MapViewProps {
   serviceOrders: ServiceOrderWithOccurrence[];
   onTriggerMockAlerts: (id: string) => void;
   onUpdateMunicipality: (updated: Municipality) => void;
+  onUpdateOccurrenceStatus?: (id: string, nextStatus: 'Pendente' | 'Em Resolução' | 'Resolvido') => void;
 }
 
 type GeoState = 'idle' | 'locating' | 'found' | 'denied';
@@ -153,8 +154,12 @@ function MapRefCapture({ mapRef }: { mapRef: MutableRefObject<L.Map | null> }) {
 
 // ─── Main Component ─────────────────────────────────────────────
 
-export default function MapView({ municipalities, occurrences, serviceOrders, onTriggerMockAlerts, onUpdateMunicipality }: MapViewProps) {
+export default function MapView({ municipalities, occurrences, serviceOrders, onTriggerMockAlerts, onUpdateMunicipality, onUpdateOccurrenceStatus }: MapViewProps) {
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [selectedEntity, setSelectedEntity] = useState<{
+    type: 'municipality' | 'occurrence' | 'serviceOrder';
+    id: string;
+  } | null>(null);
   const [userPos, setUserPos]       = useState<[number, number] | null>(null);
   const [userAccuracy, setUserAccuracy] = useState<number>(0);
   const [geoState, setGeoState]     = useState<GeoState>('idle');
@@ -164,7 +169,19 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
   const [mapReady, setMapReady]           = useState(false);
 
   const mapRef = useRef<L.Map | null>(null);
-  const selectedCity = municipalities.find((m) => m.id === selectedCityId) ?? null;
+  const selectedMunicipality = selectedEntity?.type === 'municipality'
+    ? municipalities.find((m) => m.id === selectedEntity.id)
+    : null;
+
+  const selectedOccurrence = selectedEntity?.type === 'occurrence'
+    ? occurrences.find((o) => o.id === selectedEntity.id)
+    : null;
+
+  const selectedServiceOrder = selectedEntity?.type === 'serviceOrder'
+    ? serviceOrders.find((so) => so.id === selectedEntity.id)
+    : null;
+
+  const selectedCity = selectedMunicipality ?? null;
 
   // ── Geolocation logic ──────────────────────────────────────
   const requestLocation = () => {
@@ -341,7 +358,12 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
                   key={m.id}
                   position={[m.latitude, m.longitude]}
                   icon={createStatusIcon(m.status, m.id === selectedCityId)}
-                  eventHandlers={{ click: () => setSelectedCityId(m.id) }}
+                  eventHandlers={{
+                    click: () => {
+                      setSelectedCityId(m.id);
+                      setSelectedEntity({ type: 'municipality', id: m.id });
+                    }
+                  }}
                 >
                   <Popup>
                     <div style={{ minWidth: 160 }}>
@@ -374,6 +396,11 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
                   key={`occ-${o.id}`}
                   position={[o.latitude!, o.longitude!]}
                   icon={createOccurrenceIcon(o.priority)}
+                  eventHandlers={{
+                    click: () => {
+                      setSelectedEntity({ type: 'occurrence', id: o.id });
+                    }
+                  }}
                 >
                   <Popup>
                     <div style={{ minWidth: 180 }}>
@@ -413,10 +440,15 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
                       key={`os-${so.id}`}
                       position={[occ.latitude!, occ.longitude!]}
                       icon={createOsIcon(so.status)}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedEntity({ type: 'serviceOrder', id: so.id });
+                        }
+                      }}
                     >
                       <Popup>
                         <div style={{ minWidth: 200 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                             <span style={{ fontWeight: 700, fontSize: 13, color: '#f59e0b' }}>{so.os_number}</span>
                             <span style={{
                               padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
@@ -457,35 +489,87 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
         <div className="lg:col-span-4 space-y-4">
 
           {/* Legend */}
-          <div className="glass-card rounded-xl border border-outline-variant p-4 flex flex-wrap gap-3 text-xs font-semibold">
-            {[
-              { color: '#16a34a', label: 'Ativo' },
-              { color: '#dc2626', label: 'Pendente' },
-              { color: '#6b7280', label: 'Inativo' },
-              { color: '#4f46e5', label: 'Selecionado' },
-              { color: '#3b82f6', label: 'A sua posição' },
-            ].map(({ color, label }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full inline-block" style={{ background: color }} />
-                <span className="text-on-surface-variant">{label}</span>
+          <div className="glass-card rounded-xl border border-outline-variant p-4 space-y-3 text-xs font-semibold">
+            <p className="text-[10px] uppercase tracking-wider text-on-surface-variant/70 border-b border-outline-variant pb-1.5 mb-2">
+              Legenda do Mapa
+            </p>
+            
+            {/* Autarquias Section */}
+            <div className="space-y-2">
+              <span className="text-[10px] text-on-surface-variant/50 block font-normal">AUTARQUIAS (PINOS)</span>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  { color: '#16a34a', label: 'Ativo' },
+                  { color: '#dc2626', label: 'Pendente' },
+                  { color: '#6b7280', label: 'Inativo' },
+                  { color: '#4f46e5', label: 'Selecionado' },
+                ].map(({ color, label }) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <svg width="12" height="15" viewBox="0 0 36 47" className="shrink-0">
+                      <path d="M18 2C10.3 2 4 8.3 4 16c0 10.5 14 28 14 28S32 26.5 32 16C32 8.3 25.7 2 18 2z" fill={color} stroke="white" strokeWidth="3"/>
+                    </svg>
+                    <span className="text-on-surface-variant">{label}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            {/* Ocorrências Section */}
+            <div className="space-y-2 pt-1 border-t border-outline-variant/50">
+              <span className="text-[10px] text-on-surface-variant/50 block font-normal">OCORRÊNCIAS (CÍRCULOS)</span>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  { color: '#dc2626', label: 'Crítico' },
+                  { color: '#ea580c', label: 'Alto' },
+                  { color: '#ca8a04', label: 'Médio' },
+                  { color: '#6b7280', label: 'Baixo' },
+                ].map(({ color, label }) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full inline-block border border-white shadow-sm" style={{ background: color }} />
+                    <span className="text-on-surface-variant">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Ordens de Serviço Section */}
+            <div className="space-y-2 pt-1 border-t border-outline-variant/50">
+              <span className="text-[10px] text-on-surface-variant/50 block font-normal">ORDENS DE SERVIÇO (LOSANGOS)</span>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  { color: '#f59e0b', label: 'Aberta' },
+                  { color: '#3b82f6', label: 'Em Execução' },
+                  { color: '#10b981', label: 'Concluída' },
+                ].map(({ color, label }) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 inline-block rotate-45 border border-white shadow-sm" style={{ background: color }} />
+                    <span className="text-on-surface-variant">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Minha Posição */}
+            <div className="pt-1 border-t border-outline-variant/50 flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full inline-block bg-[#3b82f6] border-2 border-white shadow-sm" />
+              <span className="text-on-surface-variant">A sua posição</span>
+            </div>
           </div>
 
           {/* Inspection Panel */}
-          <div className="glass-card p-6 border border-outline-variant rounded-xl flex flex-col h-[460px]">
-            {selectedCity ? (
+          <div className="glass-card p-6 border border-outline-variant rounded-xl flex flex-col h-[460px] overflow-y-auto">
+            {selectedMunicipality ? (
               <div className="flex flex-col justify-between h-full animate-in fade-in slide-in-from-right-2 duration-200">
                 <div>
                   <div className="flex justify-between items-start gap-2 mb-4">
                     <div>
-                      <h3 className="font-bold text-xl text-on-surface leading-tight">{selectedCity.name}</h3>
+                      <h3 className="font-bold text-xl text-on-surface leading-tight">{selectedMunicipality.name}</h3>
                       <p className="text-xs text-on-surface-variant mt-1">
-                        Código: {selectedCity.code} · ID: {selectedCity.id}
+                        Código: {selectedMunicipality.code} · ID: {selectedMunicipality.id}
                       </p>
                     </div>
                     <span className="bg-primary-container text-on-primary-container text-[11px] font-semibold px-2.5 py-1 rounded shrink-0">
-                      {selectedCity.plan}
+                      {selectedMunicipality.plan}
                     </span>
                   </div>
 
@@ -496,17 +580,17 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
                       {
                         icon: <Users className="h-4 w-4" />,
                         label: 'Utilizadores Ativos',
-                        value: selectedCity.users.toLocaleString('pt-PT'),
+                        value: selectedMunicipality.users.toLocaleString('pt-PT'),
                       },
                       {
                         icon: <AlertTriangle className="h-4 w-4 text-tertiary" />,
                         label: 'Ocorrências este Mês',
-                        value: selectedCity.occurrencesMonth.toLocaleString('pt-PT'),
+                        value: selectedMunicipality.occurrencesMonth.toLocaleString('pt-PT'),
                       },
                       {
                         icon: <Navigation className="h-4 w-4 text-primary" />,
                         label: 'Coordenadas GPS',
-                        value: `${selectedCity.latitude.toFixed(4)}°N, ${Math.abs(selectedCity.longitude).toFixed(4)}°W`,
+                        value: `${selectedMunicipality.latitude.toFixed(4)}°N, ${Math.abs(selectedMunicipality.longitude).toFixed(4)}°W`,
                       },
                       {
                         icon: <ShieldCheck className="h-4 w-4 text-secondary" />,
@@ -515,10 +599,10 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
                           <span className="flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full" style={{
                               background:
-                                selectedCity.status === 'Ativo'    ? '#16a34a' :
-                                selectedCity.status === 'Pendente' ? '#dc2626' : '#6b7280',
+                                selectedMunicipality.status === 'Ativo'    ? '#16a34a' :
+                                selectedMunicipality.status === 'Pendente' ? '#dc2626' : '#6b7280',
                             }} />
-                            {selectedCity.status}
+                            {selectedMunicipality.status}
                           </span>
                         ),
                       },
@@ -542,8 +626,8 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
                   <button
                     id="btn-trigger-sensory-alert"
                     onClick={() => {
-                      onTriggerMockAlerts(selectedCity.id);
-                      alert(`Sinal emitido para o nó de sensores em ${selectedCity.name}. Ocorrência registada!`);
+                      onTriggerMockAlerts(selectedMunicipality.id);
+                      alert(`Sinal emitido para o nó de sensores em ${selectedMunicipality.name}. Ocorrência registada!`);
                     }}
                     className="w-full bg-primary hover:opacity-90 text-on-primary font-semibold text-xs uppercase tracking-wider py-3 rounded-lg cursor-pointer flex items-center justify-center gap-2 border-none shadow-sm"
                   >
@@ -554,19 +638,183 @@ export default function MapView({ municipalities, occurrences, serviceOrders, on
                   <button
                     id="btn-toggle-activity-map"
                     onClick={() => {
-                      const nextStatus = selectedCity.status === 'Ativo' ? 'Inativo' : 'Ativo';
-                      onUpdateMunicipality({ ...selectedCity, status: nextStatus as any });
+                      const nextStatus = selectedMunicipality.status === 'Ativo' ? 'Inativo' : 'Ativo';
+                      onUpdateMunicipality({ ...selectedMunicipality, status: nextStatus as any });
                     }}
                     className="w-full bg-surface-container-high hover:bg-surface-variant text-on-surface font-semibold text-xs uppercase tracking-wider py-3 rounded-lg transition-all text-center cursor-pointer border-none"
                   >
-                    Marcar como {selectedCity.status === 'Ativo' ? 'Inativo' : 'Ativo'}
+                    Marcar como {selectedMunicipality.status === 'Ativo' ? 'Inativo' : 'Ativo'}
                   </button>
+                </div>
+              </div>
+            ) : selectedOccurrence ? (
+              <div className="flex flex-col justify-between h-full animate-in fade-in slide-in-from-right-2 duration-200">
+                <div>
+                  <div className="flex justify-between items-start gap-2 mb-4">
+                    <div>
+                      <h3 className="font-bold text-lg text-on-surface leading-tight">{selectedOccurrence.title}</h3>
+                      <p className="text-[11px] text-on-surface-variant mt-1">
+                        ID: {selectedOccurrence.id}
+                      </p>
+                    </div>
+                    <span className="bg-tertiary-container text-on-tertiary-container text-[10px] font-semibold px-2 py-0.5 rounded shrink-0">
+                      {selectedOccurrence.category}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-outline-variant mb-4" />
+
+                  <div className="space-y-4 text-xs">
+                    {[
+                      {
+                        icon: <MapPin className="h-4 w-4 text-primary" />,
+                        label: 'Município',
+                        value: selectedOccurrence.municipality,
+                      },
+                      {
+                        icon: <Navigation className="h-4 w-4 text-secondary" />,
+                        label: 'Localização / Endereço',
+                        value: selectedOccurrence.address || selectedOccurrence.neighborhood || 'Não especificado',
+                      },
+                      {
+                        icon: <AlertTriangle className="h-4 w-4 text-error" />,
+                        label: 'Prioridade / Estado',
+                        value: (
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">{selectedOccurrence.priority}</span>
+                            <span>·</span>
+                            <span className="font-bold text-on-surface-variant">{selectedOccurrence.status}</span>
+                          </div>
+                        ),
+                      },
+                      {
+                        icon: <Users className="h-4 w-4" />,
+                        label: 'Relator / Data',
+                        value: `${selectedOccurrence.reporter} em ${selectedOccurrence.date}`,
+                      },
+                    ].map(({ icon, label, value }) => (
+                      <div key={label} className="flex items-center gap-3">
+                        <div className="p-2 bg-surface-container border border-outline-variant text-on-surface rounded-lg shrink-0">
+                          {icon}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold text-on-surface-variant leading-none uppercase tracking-wider">
+                            {label}
+                          </p>
+                          <p className="text-sm font-semibold text-on-surface mt-1">{value}</p>
+                        </div>
+                      </div>
+                    ))}
+
+                    {selectedOccurrence.description && (
+                      <div className="mt-3 p-3 bg-surface-container border border-outline-variant rounded-lg">
+                        <p className="text-[10px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">
+                          Descrição
+                        </p>
+                        <p className="text-xs text-on-surface leading-normal">{selectedOccurrence.description}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {onUpdateOccurrenceStatus && selectedOccurrence.status !== 'Resolvido' && (
+                  <div className="space-y-3 pt-6 border-t border-outline-variant mt-auto">
+                    {selectedOccurrence.status === 'Pendente' || selectedOccurrence.status === 'Aberto' ? (
+                      <button
+                        onClick={() => {
+                          onUpdateOccurrenceStatus(selectedOccurrence.id, 'Em Resolução');
+                          setSelectedEntity({ type: 'occurrence', id: selectedOccurrence.id });
+                          alert(`Ocorrência ${selectedOccurrence.id} despachada para equipa de terreno!`);
+                        }}
+                        className="w-full bg-primary hover:opacity-90 text-on-primary font-semibold text-xs uppercase tracking-wider py-3 rounded-lg cursor-pointer flex items-center justify-center gap-2 border-none shadow-sm"
+                      >
+                        <Zap className="h-4 w-4" />
+                        <span>Despachar Ocorrência</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          onUpdateOccurrenceStatus(selectedOccurrence.id, 'Resolvido');
+                          setSelectedEntity({ type: 'occurrence', id: selectedOccurrence.id });
+                          alert(`Ocorrência ${selectedOccurrence.id} marcada como resolvida com sucesso!`);
+                        }}
+                        className="w-full bg-[#10b981] hover:opacity-90 text-white font-semibold text-xs uppercase tracking-wider py-3 rounded-lg cursor-pointer flex items-center justify-center gap-2 border-none shadow-sm"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Resolver Ocorrência</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : selectedServiceOrder ? (
+              <div className="flex flex-col justify-between h-full animate-in fade-in slide-in-from-right-2 duration-200">
+                <div>
+                  <div className="flex justify-between items-start gap-2 mb-4">
+                    <div>
+                      <h3 className="font-bold text-lg text-primary leading-tight">{selectedServiceOrder.os_number}</h3>
+                      <p className="text-[11px] text-on-surface-variant mt-1">
+                        Ordem de Serviço
+                      </p>
+                    </div>
+                    <span className="bg-warning-container text-on-warning-container text-[10px] font-semibold px-2 py-0.5 rounded shrink-0">
+                      {selectedServiceOrder.status}
+                    </span>
+                  </div>
+
+                  <div className="border-t border-outline-variant mb-4" />
+
+                  <div className="space-y-4 text-xs">
+                    {[
+                      {
+                        icon: <FileText className="h-4 w-4 text-primary" />,
+                        label: 'Ocorrência Associada',
+                        value: selectedServiceOrder.occurrences?.title || 'Não disponível',
+                      },
+                      {
+                        icon: <AlertTriangle className="h-4 w-4 text-error" />,
+                        label: 'Prioridade',
+                        value: selectedServiceOrder.priority,
+                      },
+                      {
+                        icon: <Users className="h-4 w-4 text-secondary" />,
+                        label: 'Equipa Responsável',
+                        value: selectedServiceOrder.responsible_team_id || 'A aguardar atribuição',
+                      },
+                      {
+                        icon: <Clock className="h-4 w-4" />,
+                        label: 'Prazo Limite',
+                        value: selectedServiceOrder.deadline ? selectedServiceOrder.deadline.substring(0, 10) : 'Sem prazo definido',
+                      },
+                    ].map(({ icon, label, value }) => (
+                      <div key={label} className="flex items-center gap-3">
+                        <div className="p-2 bg-surface-container border border-outline-variant text-on-surface rounded-lg shrink-0">
+                          {icon}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold text-on-surface-variant leading-none uppercase tracking-wider">
+                            {label}
+                          </p>
+                          <p className="text-sm font-semibold text-on-surface mt-1">{value}</p>
+                        </div>
+                      </div>
+                    ))}
+
+                    {selectedServiceOrder.resolution_report && (
+                      <div className="mt-3 p-3 bg-surface-container border border-outline-variant rounded-lg">
+                        <p className="text-[10px] font-semibold text-on-surface-variant uppercase tracking-wider mb-1">
+                          Relatório de Resolução
+                        </p>
+                        <p className="text-xs text-on-surface leading-normal">{selectedServiceOrder.resolution_report}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="h-full flex flex-col justify-center items-center text-center p-6 text-on-surface-variant/40 text-sm">
                 <Navigation className="h-10 w-10 text-primary/20 animate-bounce mb-3" />
-                <p>Clique num marcador no mapa para visualizar a telemetria da autarquia.</p>
+                <p>Clique num marcador no mapa para visualizar a telemetria do item selecionado.</p>
                 {geoState === 'found' && userPos && (
                   <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 w-full">
                     <p className="text-[11px] text-blue-400 font-semibold flex items-center justify-center gap-1.5">

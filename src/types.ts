@@ -5,7 +5,7 @@ export interface Municipality {
   name: string;
   code: string; // e.g. "LX"
   status: 'Ativo' | 'Pendente' | 'Inativo';
-  plan: 'Enterprise' | 'Premium' | 'Básico';
+  plan: 'Enterprise' | 'Premium' | 'Profissional' | 'Básico';
   users: number;
   occurrencesMonth: number;
   latitude: number;

@@ -5,7 +5,7 @@ import type { Municipality } from '../types';
 interface MunicipalityTableProps {
   municipalities: Municipality[];
   selectedPlanFilter: string | null;
-  setSelectedPlanFilter: (plan: 'Enterprise' | 'Premium' | 'Básico' | null) => void;
+  setSelectedPlanFilter: (plan: 'Enterprise' | 'Premium' | 'Profissional' | 'Básico' | null) => void;
   onUpdateMunicipality: (updated: Municipality) => void;
   onDeleteMunicipality: (id: string) => void;
   onTriggerMockAlerts: (id: string) => void;
@@ -82,12 +82,14 @@ export default function MunicipalityTable({
   };
 
   // Plan-badge styles generator
-  const getPlanBadgeStyle = (plan: 'Enterprise' | 'Premium' | 'Básico') => {
+  const getPlanBadgeStyle = (plan: 'Enterprise' | 'Premium' | 'Profissional' | 'Básico') => {
     switch (plan) {
       case 'Enterprise':
         return 'border border-primary text-primary bg-transparent';
       case 'Premium':
         return 'border border-secondary text-secondary bg-transparent';
+      case 'Profissional':
+        return 'border border-tertiary text-tertiary bg-transparent';
       case 'Básico':
         return 'border border-outline text-on-surface-variant bg-transparent';
     }
@@ -143,7 +145,7 @@ export default function MunicipalityTable({
               <div className="absolute right-0 mt-2 z-50 w-64 bg-surface-container-lowest border border-outline-variant p-4 rounded-xl shadow-xl">
                 <p className="text-[10px] font-semibold text-on-surface-variant/80 uppercase tracking-wider mb-2">Filtro por Plano</p>
                 <div className="grid grid-cols-2 gap-1.5 mb-4 text-[10px] uppercase">
-                  {(['Enterprise', 'Premium', 'Básico'] as const).map((p) => (
+                  {(['Enterprise', 'Premium', 'Profissional', 'Básico'] as const).map((p) => (
                     <button
                       key={p}
                       onClick={() => {
@@ -258,13 +260,14 @@ export default function MunicipalityTable({
                       onChange={(e) => {
                         onUpdateMunicipality({
                           ...m,
-                          plan: e.target.value as 'Enterprise' | 'Premium' | 'Básico'
+                          plan: e.target.value as 'Enterprise' | 'Premium' | 'Profissional' | 'Básico'
                         });
                       }}
                       className={`text-[11px] font-semibold px-3 py-1 cursor-pointer appearance-none text-center outline-none rounded min-w-[100px] ${getPlanBadgeStyle(m.plan)}`}
                     >
                       <option value="Enterprise">Enterprise</option>
                       <option value="Premium">Premium</option>
+                      <option value="Profissional">Profissional</option>
                       <option value="Básico">Básico</option>
                     </select>
                   </td>

@@ -63,7 +63,7 @@ export default function App() {
   const [teamMembers, setTeamMembers]       = useState<TeamMember[]>([]);
   const [serviceOrders, setServiceOrders]   = useState<ServiceOrderWithOccurrence[]>([]);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [selectedPlanFilter, setSelectedPlanFilter] = useState<'Enterprise' | 'Premium' | 'Básico' | null>(null);
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState<'Enterprise' | 'Premium' | 'Profissional' | 'Básico' | null>(null);
   const [loadState, setLoadState]   = useState<LoadState>('loading');
   const [dbError, setDbError]       = useState<string | null>(null);
 
@@ -385,6 +385,7 @@ export default function App() {
             serviceOrders={serviceOrders}
             onUpdateMunicipality={handleUpdateMunicipality}
             onTriggerMockAlerts={handleTriggerMockAlerts}
+            onUpdateOccurrenceStatus={handleUpdateOccurrenceStatus}
           />
         )}
 
